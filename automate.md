@@ -73,3 +73,15 @@ Before running the pipelines, ensure you have the following secrets added to you
 1.  **Check Actions Tab**: Ensure both workflows complete successfully.
 2.  **AWS Console**: Check your EC2 dashboard. You should see the instance launching or running.
 3.  **access Strapi**: Visit `http://<EC2_PUBLIC_IP>:1337` (or port 80 if Nginx is configured correctly).
+
+## 5. Destroy Infrastructure
+
+**File**: `.github/workflows/destroy.yml`
+
+### Triggers
+- **Manual Trigger only**: Go to **Actions** -> **Destroy Infrastructure** -> **Run workflow**.
+
+### What it does
+- Runs `terraform destroy -auto-approve` to completely remove all AWS resources created by this project (EC2, Security Groups, Key Pairs, etc.).
+- **Warning**: This action is irreversible. All data on the EC2 instance will be lost.
+
