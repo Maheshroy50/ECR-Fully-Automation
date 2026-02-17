@@ -7,31 +7,19 @@ resource "aws_ecs_cluster" "main" {
 }
 
 # --- IAM Role for EC2 Instances ---
-resource "aws_iam_role" "ecs_instance_role" {
-  name = "${var.project_name}-ecs-instance-role"
+data "aws_caller_identity" "current" {}
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
+resource "aws_ec2_tag" "cluster_tag" {
+  resource_id = aws_ecs_cluster.main.arn
+  key         = "Name"
+  value       = "${var.project_name}-cluster"
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
-  role       = aws_iam_role.ecs_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
+# --- Instance Profile for Existing Role ---
+# We create a profile for the EXISTING role: AmazonEC2ContainerServiceforEC2Role
 resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "${var.project_name}-ecs-instance-profile"
-  role = aws_iam_role.ecs_instance_role.name
+  role = "AmazonEC2ContainerServiceforEC2Role"
 }
 
 # --- Launch Template ---
@@ -88,38 +76,17 @@ resource "aws_autoscaling_group" "ecs_asg" {
 }
 
 # --- ECS Task Definition ---
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "${var.project_name}-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
+resource "aws_cloudwatch_log_group" "strapi" {
+  name              = "/ecs/${var.project_name}"
+  retention_in_days = 7
 }
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-
 
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "${var.project_name}-task"
-  network_mode             = "bridge" # Changed to bridge for EC2
+  network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   cpu                      = var.cpu
   memory                   = var.memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-
   container_definitions = jsonencode([
     {
       name      = "strapi"
