@@ -76,10 +76,7 @@ resource "aws_autoscaling_group" "ecs_asg" {
 }
 
 # --- ECS Task Definition ---
-resource "aws_cloudwatch_log_group" "strapi" {
-  name              = "/ecs/${var.project_name}"
-  retention_in_days = 7
-}
+
 
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "${var.project_name}-task"
@@ -146,5 +143,5 @@ resource "aws_ecs_service" "strapi" {
     container_port   = 1337
   }
 
-  depends_on = [aws_iam_role_policy_attachment.ecs_task_execution_role_policy]
+
 }
