@@ -110,10 +110,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_cloudwatch_log_group" "strapi" {
-  name              = "/ecs/${var.project_name}"
-  retention_in_days = 7
-}
+
 
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "${var.project_name}-task"
@@ -152,7 +149,7 @@ resource "aws_ecs_task_definition" "strapi" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.strapi.name
+          "awslogs-group"         = "/ecs/${var.project_name}"
           "awslogs-region"        = var.region
           "awslogs-stream-prefix" = "ecs"
         }
