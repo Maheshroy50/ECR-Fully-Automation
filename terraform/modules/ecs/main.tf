@@ -9,18 +9,11 @@ resource "aws_ecs_cluster" "main" {
 # --- IAM Role for EC2 Instances ---
 data "aws_caller_identity" "current" {}
 
-resource "aws_ec2_tag" "cluster_tag" {
-  resource_id = aws_ecs_cluster.main.arn
-  key         = "Name"
-  value       = "${var.project_name}-cluster"
-}
+
 
 # --- Instance Profile for Existing Role ---
 # We create a profile for the EXISTING role: AmazonEC2ContainerServiceforEC2Role
-resource "aws_iam_instance_profile" "ecs_instance_profile" {
-  name = "${var.project_name}-ecs-instance-profile"
-  role = "AmazonEC2ContainerServiceforEC2Role"
-}
+
 
 # --- Launch Template ---
 data "aws_ssm_parameter" "ecs_optimized_ami" {
@@ -33,7 +26,7 @@ resource "aws_launch_template" "ecs_lt" {
   instance_type = var.instance_type
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ecs_instance_profile.name
+    name = "ec2-ecr-role"
   }
 
   network_interfaces {
