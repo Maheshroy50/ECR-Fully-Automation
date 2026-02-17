@@ -58,13 +58,4 @@ The following Terraform variables will be used. You can set them in `terraform.t
 -   **Instance Connectivity**: If ECS tasks fail to start, check if the EC2 instances in the Auto Scaling Group have registered with the cluster.
 -   **Database Connection**: Ensure the `rds_sg` allows traffic from `ecs_sg`.
 
-## Local Usage
 
-To run Terraform locally:
-```bash
-cd terraform
-export AWS_PROFILE=my-profile
-terraform init
-terraform plan
-terraform apply
-```
