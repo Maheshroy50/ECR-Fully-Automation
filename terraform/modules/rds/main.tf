@@ -11,7 +11,7 @@ resource "aws_db_instance" "default" {
   allocated_storage      = 20
   storage_type           = "gp2"
   engine                 = "postgres"
-  engine_version         = "14.10"
+  engine_version         = "14"
   instance_class         = "db.t3.micro"
   identifier             = "${var.project_name}-db"
   db_name                = "strapi"
