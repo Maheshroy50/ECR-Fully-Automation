@@ -6,6 +6,88 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
+# --- IAM Role for EC2 Instances ---
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "${var.project_name}-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "${var.project_name}-ecs-instance-profile"
+  role = aws_iam_role.ecs_instance_role.name
+}
+
+# --- Launch Template ---
+data "aws_ssm_parameter" "ecs_optimized_ami" {
+  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
+}
+
+resource "aws_launch_template" "ecs_lt" {
+  name_prefix   = "${var.project_name}-ecs-lt-"
+  image_id      = data.aws_ssm_parameter.ecs_optimized_ami.value
+  instance_type = var.instance_type
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ecs_instance_profile.name
+  }
+
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [var.ecs_sg_id]
+  }
+
+  user_data = base64encode(<<EOF
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
+EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${var.project_name}-ecs-instance"
+    }
+  }
+}
+
+# --- Auto Scaling Group ---
+resource "aws_autoscaling_group" "ecs_asg" {
+  name                = "${var.project_name}-asg"
+  vpc_zone_identifier = var.public_subnets
+  launch_template {
+    id      = aws_launch_template.ecs_lt.id
+    version = "$Latest"
+  }
+
+  min_size         = 1
+  max_size         = 2
+  desired_capacity = 1
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = true
+  }
+}
+
+# --- ECS Task Definition ---
 resource "aws_iam_role" "ecs_task_execution_role" {
   name = "${var.project_name}-ecs-task-execution-role"
 
@@ -25,7 +107,7 @@ resource "aws_iam_role" "ecs_task_execution_role" {
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 resource "aws_cloudwatch_log_group" "strapi" {
@@ -35,8 +117,8 @@ resource "aws_cloudwatch_log_group" "strapi" {
 
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "${var.project_name}-task"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
+  network_mode             = "bridge" # Changed to bridge for EC2
+  requires_compatibilities = ["EC2"]
   cpu                      = var.cpu
   memory                   = var.memory
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
@@ -44,12 +126,13 @@ resource "aws_ecs_task_definition" "strapi" {
   container_definitions = jsonencode([
     {
       name      = "strapi"
-      image     = "${var.image_url}:${var.image_tag}" # Dynamically construct image URL with tag
+      image     = "${var.image_url}:${var.image_tag}"
       essential = true
       portMappings = [
         {
           containerPort = 1337
           hostPort      = 1337
+          protocol      = "tcp"
         }
       ]
       environment = [
@@ -78,18 +161,20 @@ resource "aws_ecs_task_definition" "strapi" {
   ])
 }
 
+# --- ECS Service ---
 resource "aws_ecs_service" "strapi" {
   name            = "${var.project_name}-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.strapi.arn
   desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+  launch_type     = "EC2"
 
-  network_configuration {
-    subnets          = var.public_subnets
-    security_groups  = [var.ecs_sg_id]
-    assign_public_ip = true
-  }
+  # Network configuration block is NOT required for network_mode = "bridge"
+  # network_configuration {
+  #   subnets          = var.public_subnets
+  #   security_groups  = [var.ecs_sg_id]
+  #   assign_public_ip = true
+  # }
 
   load_balancer {
     target_group_arn = var.target_group_arn

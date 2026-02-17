@@ -38,6 +38,8 @@ module "ecs" {
   # Pass the repository URL and the specific tag we want to deploy
   image_url = data.aws_ecr_repository.strapi.repository_url
   image_tag = var.image_tag
+  
+  vpc_id = module.vpc.vpc_id
 
   db_host     = module.rds.db_host
   db_port     = module.rds.db_port

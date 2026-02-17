@@ -51,6 +51,17 @@ variable "desired_count" {
   default     = 1
 }
 
+variable "instance_type" {
+  description = "EC2 Instance Type for ECS"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
 # Database Variables
 variable "db_host" {
   type = string

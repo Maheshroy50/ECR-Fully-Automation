@@ -10,6 +10,12 @@ variable "project_name" {
   default     = "strapi-app"
 }
 
+variable "instance_type" {
+  description = "EC2 Instance Type for ECS"
+  type        = string
+  default     = "t2.micro"
+}
+
 variable "image_tag" {
   description = "Docker image tag to deploy (e.g., git sha)"
   type        = string
