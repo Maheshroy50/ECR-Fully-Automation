@@ -10,31 +10,38 @@ variable "project_name" {
   default     = "strapi-app"
 }
 
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t2.micro"
-}
-
-variable "docker_username" {
-  description = "Docker Hub Username"
-  type        = string
-  sensitive   = true
-}
-
-variable "docker_password" {
-  description = "Docker Hub Password/Token"
-  type        = string
-  sensitive   = true
-}
-
-variable "strapi_image" {
-  description = "Docker Image Name (e.g., myuser/my-strapi-app)"
-  type        = string
-}
-
-variable "strapi_image_tag" {
-  description = "Docker Image Tag"
+variable "image_tag" {
+  description = "Docker image tag to deploy (e.g., git sha)"
   type        = string
   default     = "latest"
+}
+
+variable "db_password" {
+  description = "Database password"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  description = "Strapi JWT Secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "admin_jwt_secret" {
+  description = "Strapi Admin JWT Secret"
+  type        = string
+  sensitive   = true
+}
+
+variable "app_keys" {
+  description = "Strapi App Keys"
+  type        = string
+  sensitive   = true
+}
+
+variable "api_token_salt" {
+  description = "Strapi API Token Salt"
+  type        = string
+  sensitive   = true
 }

@@ -1,0 +1,11 @@
+project_name = "strapi-app"
+region       = "us-east-1"
+
+# Database Secrets
+db_password  = "change_me_secure_password"
+
+# Strapi Secrets
+jwt_secret       = "change_me_jwt_secret"
+admin_jwt_secret = "change_me_admin_jwt_secret"
+app_keys         = "key1,key2,key3,key4"
+api_token_salt   = "change_me_salt"
