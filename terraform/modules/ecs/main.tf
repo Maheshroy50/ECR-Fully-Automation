@@ -11,22 +11,8 @@ data "aws_caller_identity" "current" {}
 
 
 
-# --- Instance Profile for Existing Role ---
-# We create a profile for the EXISTING role: AmazonEC2ContainerServiceforEC2Role
-
-
-# --- Launch Template ---
-data "aws_ssm_parameter" "ecs_optimized_ami" {
-  name = "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id"
-}
-
-resource "aws_launch_template" "ecs_lt" {
-  name_prefix   = "${var.project_name}-ecs-lt-"
-  image_id      = data.aws_ssm_parameter.ecs_optimized_ami.value
-  instance_type = var.instance_type
-
   iam_instance_profile {
-    name = "ec2-ecr-role"
+    name = "ecsInstanceRole"
   }
 
   network_interfaces {
