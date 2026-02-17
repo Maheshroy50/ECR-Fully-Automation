@@ -34,9 +34,10 @@ jobs:
       - name: Terraform Destroy
         id: destroy
         run: |
-          terraform destroy \
-            -auto-approve \
-            -var="docker_username=${{ secrets.DOCKER_USERNAME }}" \
-            -var="docker_password=${{ secrets.DOCKER_PASSWORD }}" \
-            -var="strapi_image=maheshbhoopathirao/strapi-app" \
-            -var="strapi_image_tag=latest"
+          terraform destroy -auto-approve
+        env:
+          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+          TF_VAR_jwt_secret: ${{ secrets.TF_VAR_JWT_SECRET }}
+          TF_VAR_admin_jwt_secret: ${{ secrets.TF_VAR_ADMIN_JWT_SECRET }}
+          TF_VAR_app_keys: ${{ secrets.TF_VAR_APP_KEYS }}
+          TF_VAR_api_token_salt: ${{ secrets.TF_VAR_API_TOKEN_SALT }}
