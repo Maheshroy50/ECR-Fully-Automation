@@ -9,19 +9,17 @@ resource "aws_ecs_cluster" "main" {
 # --- Execution Role for Fargate ---
 # You MUST create this role manually in IAM console if it doesn't exist.
 # Trusted entity: ecs-tasks.amazonaws.com
-# Policies: AmazonECSTaskExecutionRolePolicy
-data "aws_iam_role" "execution_role" {
-  name = "ecs_fargate_taskRole"
-}
+# --- Execution Role for Fargate ---
+# Hardcoded to bypass iam:GetRole permission error
+# ARN: arn:aws:iam::811738710312:role/ecs_fargate_taskRole
 
-# --- ECS Task Definition ---
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "${var.project_name}-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
   cpu                      = 1024 # 1 vCPU
   memory                   = 2048 # 2 GB
-  execution_role_arn       = data.aws_iam_role.execution_role.arn
+  execution_role_arn       = "arn:aws:iam::811738710312:role/ecs_fargate_taskRole"
 
   container_definitions = jsonencode([
     {

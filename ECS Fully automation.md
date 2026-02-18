@@ -1,11 +1,14 @@
-# ECS Fully Automation Guide (EC2 Launch Type)
+# ECS Fully Automation Guide (Fargate Launch Type)
 
-This guide details how to deploy your Strapi application on **AWS ECS using EC2 instances** (for maximum control and cost check) and a cost-optimized **RDS (db.t3.micro, Single-AZ)**.
+This guide details how to deploy your Strapi application on **AWS ECS using Fargate** (Serverless) and a cost-optimized **RDS (db.t3.micro, Single-AZ)**.
 
 ## Architecture Highlights
 
--   **Compute**: ECS running on **EC2 instances** (t2.micro managed via Auto Scaling Group).
--   **Database**: RDS Postgres (**db.t3.micro**, **Single-AZ**) to minimize costs.
+-   **Compute**: ECS Fargate (Serverless). No EC2 instances to manage.
+    -   **Resources**: 1 vCPU, 2 GB RAM per task.
+    -   **Scaling**: Managed by ECS Service (Desired Count: 1).
+-   **Database**: RDS Postgres (**db.t3.micro**, **Single-AZ**) in private subnets.
+-   **Networking**: `awsvpc` network mode. Tasks get their own elastic network interface (ENI) and private IP.
 -   **Registry**: Existing ECR repository `strapi-fargate-app`.
 -   **CI/CD**: Fully automated GitHub Actions workflow (Build -> Deploy).
 
@@ -14,6 +17,7 @@ This guide details how to deploy your Strapi application on **AWS ECS using EC2 
 1.  **AWS Account**: Active account.
 2.  **Terraform State**: S3 bucket `mahesh-strapi-terraform-state` exists in `us-east-1`.
 3.  **ECR Repo**: Repository `strapi-fargate-app` exists.
+4.  **IAM Role**: `ecs_fargate_taskRole` must exist in IAM with `AmazonECSTaskExecutionRolePolicy` attached.
 
 ## Secrets Required in GitHub
 
@@ -37,25 +41,25 @@ The following Terraform variables will be used. You can set them in `terraform.t
 
 | Variable | Description |
 | :--- | :--- |
-| `project_name` | Name of the project (e.g., `my-strapi`) |
+| `project_name` | Name of the project (e.g., `strapi-prod`) |
 | `db_password` | **CRITICAL**: Password for the RDS instance. |
-| `jwt_secret` | Strapi JWT Secret |
-| `api_token_salt` | Strapi API Token Salt |
-| `app_keys` | Strapi App Keys (comma separated) |
+| `image_tag` | Docker image tag (automatic in CI/CD). |
 
 ## Deployment Workflow
 
 1.  **Fully Automated**:
     -   Push code to `main`.
     -   **Step 1: Build**: Docker builds image and pushes to ECR `strapi-fargate-app`.
-    -   **Step 2: Deploy**: Terraform updates the ECS Service to run the new image on your EC2 instances.
+    -   **Step 2: Deploy**: Terraform updates the ECS Task Definition to point to the new image tag and updates the Service.
+    -   **Step 3: Rolling Update**: AWS ECS starts new Fargate tasks and drains old ones automatically.
 
 2.  **No Manual Steps**:
     -   The pipeline handles everything.
 
 ## Troubleshooting
 
--   **Instance Connectivity**: If ECS tasks fail to start, check if the EC2 instances in the Auto Scaling Group have registered with the cluster.
--   **Database Connection**: Ensure the `rds_sg` allows traffic from `ecs_sg`.
-
-
+-   **Task Stopped**: If tasks start and immediately stop, check **CloudWatch Logs** (`/ecs/strapi-prod`). Common issues:
+    -   Database connection failure (check RDS SG).
+    -   Missing Environment Variables.
+-   **Pull Access Denied**: Ensure `ecs_fargate_taskRole` has `AmazonECSTaskExecutionRolePolicy`.
+-   **502 Bad Gateway**: The task is running but Strapi is not responding on port 1337, or the Health Check is failing. Check logs.
