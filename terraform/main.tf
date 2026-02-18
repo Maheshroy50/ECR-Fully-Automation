@@ -11,7 +11,74 @@ data "aws_subnets" "default" {
     values = [data.aws_vpc.default.id]
   }
 }
+# --- Private Network Infrastructure ---
 
+# 1. Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags = {
+    Name = "${var.project_name}-nat-eip"
+  }
+}
+
+# 2. NAT Gateway (Must be in a PUBLIC subnet)
+# We pick the first default subnet for the NAT Gateway
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = tolist(data.aws_subnets.default.ids)[0]
+
+  tags = {
+    Name = "${var.project_name}-nat-gw"
+  }
+
+  depends_on = [aws_eip.nat]
+}
+
+# 3. Private Subnets
+resource "aws_subnet" "private_1" {
+  vpc_id            = data.aws_vpc.default.id
+  cidr_block        = "172.31.200.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "${var.project_name}-private-subnet-1"
+  }
+}
+
+resource "aws_subnet" "private_2" {
+  vpc_id            = data.aws_vpc.default.id
+  cidr_block        = "172.31.201.0/24"
+  availability_zone = "us-east-1b"
+
+  tags = {
+    Name = "${var.project_name}-private-subnet-2"
+  }
+}
+
+# 4. Private Route Table
+resource "aws_route_table" "private" {
+  vpc_id = data.aws_vpc.default.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-private-rt"
+  }
+}
+
+# 5. Route Table Associations
+resource "aws_route_table_association" "private_1" {
+  subnet_id      = aws_subnet.private_1.id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "private_2" {
+  subnet_id      = aws_subnet.private_2.id
+  route_table_id = aws_route_table.private.id
+}
 # --- Security Groups (Previously in VPC module) ---
 
 # ALB Security Group
@@ -90,7 +157,7 @@ data "aws_ecr_repository" "strapi" {
 module "rds" {
   source          = "./modules/rds"
   project_name    = var.project_name
-  private_subnets = data.aws_subnets.default.ids # Using default subnets
+  private_subnets = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: Private Subnets
   rds_sg_id       = aws_security_group.rds_sg.id
   db_password     = var.db_password
 }
@@ -99,7 +166,7 @@ module "alb" {
   source         = "./modules/alb"
   project_name   = var.project_name
   vpc_id         = data.aws_vpc.default.id
-  public_subnets = data.aws_subnets.default.ids
+  public_subnets = data.aws_subnets.default.ids # ALB remains in Public Subnets
   alb_sg_id      = aws_security_group.alb_sg.id
 }
 
@@ -108,7 +175,7 @@ module "ecs" {
   project_name     = var.project_name
   region           = var.region
   ecs_sg_id        = aws_security_group.ecs_sg.id
-  public_subnets   = data.aws_subnets.default.ids
+  public_subnets   = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: ECS in Private Subnets
   target_group_arn = module.alb.target_group_arn
 
   # Pass the repository URL and the specific tag we want to deploy

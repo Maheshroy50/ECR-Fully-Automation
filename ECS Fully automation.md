@@ -4,11 +4,14 @@ This guide details how to deploy your Strapi application on **AWS ECS using Farg
 
 ## Architecture Highlights
 
--   **Compute**: ECS Fargate (Serverless). No EC2 instances to manage.
+-   **Compute**: ECS Fargate (Serverless) running in **Private Subnets**.
     -   **Resources**: 1 vCPU, 2 GB RAM per task.
     -   **Scaling**: Managed by ECS Service (Desired Count: 1).
--   **Database**: RDS Postgres (**db.t3.micro**, **Single-AZ**) in private subnets.
--   **Networking**: `awsvpc` network mode. Tasks get their own elastic network interface (ENI) and private IP.
+-   **Database**: RDS Postgres (**db.t3.micro**, **Single-AZ**) in **Private Subnets**.
+-   **Networking**:
+    -   **Public**: ALB (Internet Facing).
+    -   **Private**: Fargate + RDS (No direct Internet access).
+    -   **Egress**: NAT Gateway allowed for Fargate (to pull images/logs).
 -   **Registry**: Existing ECR repository `strapi-fargate-app`.
 -   **CI/CD**: Fully automated GitHub Actions workflow (Build -> Deploy).
 
