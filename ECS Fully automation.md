@@ -1,68 +1,68 @@
-# ECS Fully Automation Guide (Fargate Launch Type)
+# ECS Fully Automation Guide (Private Fargate Architecture)
 
-This guide details how to deploy your Strapi application on **AWS ECS using Fargate** (Serverless) and a cost-optimized **RDS (db.t3.micro, Single-AZ)**.
+This guide details how to deploy your Strapi application on **AWS ECS using Fargate** (Serverless) in a **Private Network Architecture**.
 
-## Architecture Highlights
+## 🏗️ Architecture Overview
 
--   **Compute**: ECS Fargate (Serverless) running in **Private Subnets**.
-    -   **Resources**: 1 vCPU, 2 GB RAM per task.
-    -   **Scaling**: Managed by ECS Service (Desired Count: 1).
--   **Database**: RDS Postgres (**db.t3.micro**, **Single-AZ**) in **Private Subnets**.
--   **Networking**:
-    -   **Public**: ALB (Internet Facing).
-    -   **Private**: Fargate + RDS (No direct Internet access).
-    -   **Egress**: NAT Gateway allowed for Fargate (to pull images/logs).
--   **Registry**: Existing ECR repository `strapi-fargate-app`.
--   **CI/CD**: Fully automated GitHub Actions workflow (Build -> Deploy).
+The system is designed for **Maximum Security**:
 
-## Prerequisites
+1.  **Public Layer (Internet Facing)**
+    -   **ALB (Load Balancer)**: Lives in the **Public Subnets** of your Default VPC.
+    -   **NAT Gateway**: Lives in a Public Subnet. Allows private services to reach AWS (ECR, CloudWatch).
+    -   **Traffic Flow**: User -> ALB (Port 80) -> NAT -> Private Network.
+
+2.  **Private Layer (Hidden)**
+    -   **ECS Fargate**: Lives in **Private Subnets** (`172.31.200.0/24`, `172.31.201.0/24`). **No Public IP.**
+    -   **RDS Database**: Lives in **Private Subnets**. isolated from the internet.
+    -   **Security**: ECS only accepts traffic from ALB. RDS only accepts traffic from ECS.
+
+## 📋 Prerequisites
 
 1.  **AWS Account**: Active account.
-2.  **Terraform State**: S3 bucket `mahesh-strapi-terraform-state` exists in `us-east-1`.
-3.  **ECR Repo**: Repository `strapi-fargate-app` exists.
-4.  **IAM Role**: `ecs_fargate_taskRole` must exist in IAM with `AmazonECSTaskExecutionRolePolicy` attached.
+2.  **Terraform State**: S3 bucket `mahesh-strapi-terraform-state` in `us-east-1`.
+3.  **ECR Repo**: `strapi-fargate-app` (us-east-1).
+4.  **IAM Role**: `ecs_fargate_taskRole` 
+    -   **Policy**: `AmazonECSTaskExecutionRolePolicy`.
+5.  **Log Group**: CloudWatch Log Group `/ecs/strapi-prod` 
 
-## Secrets Required in GitHub
+## 🚀 Deployment Workflow (GitHub Actions)
 
-Go to **Settings** > **Secrets and variables** > **Actions** and adds these secrets:
+The process is fully automated via `.github/workflows/ci.yml`.
 
-| Secret Name | Description | Example Value |
+1.  **Push to `main`**: Triggers the pipeline.
+2.  **Build Phase**:
+    -   Docker builds the image.
+    -   Tags it with the Git Commit SHA.
+    -   Pushes to ECR: `811738710312.dkr.ecr.us-east-1.amazonaws.com/strapi-fargate-app:<sha>`
+3.  **Deploy Phase**:
+    -   Terraform runs `apply`.
+    -   Updates the **Task Definition** with the new image tag.
+    -   Updates the **ECS Service**.
+    -   ECS starts new tasks in the Private Subnets.
+
+## 🔧 Important Configuration
+
+### Terraform Variables
+| Variable | Value | Description |
 | :--- | :--- | :--- |
-| `AWS_ACCESS_KEY_ID` | CI/CD User Access Key | `AKIA...` |
-| `AWS_SECRET_ACCESS_KEY` | CI/CD User Secret Key | `wJalr...` |
-| `TF_VAR_DB_PASSWORD` | **RDS Password** | `strong_password...` |
-| `TF_VAR_JWT_SECRET` | Strapi Secret | `...` |
-| `TF_VAR_ADMIN_JWT_SECRET` | Strapi Secret | `...` |
-| `TF_VAR_API_TOKEN_SALT` | Strapi Secret | `...` |
-| `TF_VAR_APP_KEYS` | Strapi Keys | `key1,key2...` |
+| `project_name` | `strapi-prod` | Defines Log Group `/ecs/strapi-prod` |
+| `instance_type` | *REMOVED* | Not used for Fargate. |
+| `image_tag` | `latest` (or SHA) | dynamic. |
 
-> **Tip**: You can assume the variables I generated in `terraform/terraform.tfvars` are good to use.
+### Logs
+-   **Console**: Go to CloudWatch -> Log groups -> `/ecs/strapi-prod`.
+-   **Streams**: `ecs/strapi/<task-id>`.
 
-## Terraform Variables
+## 🛠️ Troubleshooting
 
-The following Terraform variables will be used. You can set them in `terraform.tfvars` locally or as environment variables in CI/CD.
+1.  **504 Gateway Timeout**:
+    -   Check if the Task is running.
+    -   Check **ALB Security Group** (Must allow port 80).
+    -   Check **ECS Security Group** (Must allow port 1337 from ALB SG).
 
-| Variable | Description |
-| :--- | :--- |
-| `project_name` | Name of the project (e.g., `strapi-prod`) |
-| `db_password` | **CRITICAL**: Password for the RDS instance. |
-| `image_tag` | Docker image tag (automatic in CI/CD). |
+2.  **Task Fails to Start (Pending -> Stopped)**:
+    -   **Log**: "CannotPullContainerError"? -> Check **NAT Gateway**. Private tasks need NAT to reach ECR.
+    -   **Log**: "Connection Timed Out"? -> Check RDS Security Group.
 
-## Deployment Workflow
-
-1.  **Fully Automated**:
-    -   Push code to `main`.
-    -   **Step 1: Build**: Docker builds image and pushes to ECR `strapi-fargate-app`.
-    -   **Step 2: Deploy**: Terraform updates the ECS Task Definition to point to the new image tag and updates the Service.
-    -   **Step 3: Rolling Update**: AWS ECS starts new Fargate tasks and drains old ones automatically.
-
-2.  **No Manual Steps**:
-    -   The pipeline handles everything.
-
-## Troubleshooting
-
--   **Task Stopped**: If tasks start and immediately stop, check **CloudWatch Logs** (`/ecs/strapi-prod`). Common issues:
-    -   Database connection failure (check RDS SG).
-    -   Missing Environment Variables.
--   **Pull Access Denied**: Ensure `ecs_fargate_taskRole` has `AmazonECSTaskExecutionRolePolicy`.
--   **502 Bad Gateway**: The task is running but Strapi is not responding on port 1337, or the Health Check is failing. Check logs.
+3.  **Database Connection Refused**:
+    -   Ensure RDS SG allows traffic on port `5432` from `ecs_sg`.
