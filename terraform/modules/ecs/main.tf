@@ -1,29 +1,25 @@
+# --- ECS Cluster ---
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
 
   tags = {
     Name = "${var.project_name}-cluster"
   }
 }
 
-# --- CloudWatch Log Group ---
-resource "aws_cloudwatch_log_group" "strapi" {
-  name              = "/ecs/${var.project_name}"
-  retention_in_days = 30
+# --- Capacity Provider (FARGATE_SPOT) ---
+resource "aws_ecs_cluster_capacity_providers" "main" {
+  cluster_name = aws_ecs_cluster.main.name
 
-  tags = {
-    Name = "${var.project_name}-logs"
+  capacity_providers = ["FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+    base              = 1
   }
 }
 
-# --- Execution Role for Fargate ---
-# You MUST create this role manually in IAM console if it doesn't exist.
-# Trusted entity: ecs-tasks.amazonaws.com
 # --- Execution Role for Fargate ---
 # Hardcoded to bypass iam:GetRole permission error
 # ARN: arn:aws:iam::811738710312:role/ecs_fargate_taskRole
@@ -62,14 +58,6 @@ resource "aws_ecs_task_definition" "strapi" {
         { name = "API_TOKEN_SALT", value = var.api_token_salt },
         { name = "DATABASE_SSL", value = "false" }
       ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/${var.project_name}"
-          "awslogs-region"        = var.region
-          "awslogs-stream-prefix" = "ecs"
-        }
-      }
     }
   ])
 }
@@ -80,7 +68,13 @@ resource "aws_ecs_service" "strapi" {
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.strapi.arn
   desired_count   = var.desired_count
-  launch_type     = "FARGATE"
+
+  # Use capacity provider strategy instead of launch_type
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 1
+    base              = 1
+  }
 
   network_configuration {
     subnets          = var.public_subnets
