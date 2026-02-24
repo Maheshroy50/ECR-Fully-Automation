@@ -10,6 +10,10 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
 }
 
 # Fetch details for all subnets to determine their Availability Zones
