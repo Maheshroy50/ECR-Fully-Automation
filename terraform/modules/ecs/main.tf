@@ -88,7 +88,7 @@ resource "aws_ecs_service" "strapi" {
   }
 
   load_balancer {
-    target_group_arn = var.target_group_blue_name # Start with Blue
+    target_group_arn = var.target_group_blue_arn # Start with Blue ARN
     container_name   = "strapi"
     container_port   = 1337
   }

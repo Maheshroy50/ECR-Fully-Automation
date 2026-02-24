@@ -186,6 +186,7 @@ module "ecs" {
   public_subnets   = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: ECS in Private Subnets
   
   # ALB ARNs for CodeDeploy Blue/Green
+  target_group_blue_arn   = module.alb.target_group_blue_arn
   target_group_blue_name  = module.alb.target_group_blue_name
   target_group_green_name = module.alb.target_group_green_name
   listener_prod_arn       = module.alb.listener_prod_arn

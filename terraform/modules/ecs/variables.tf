@@ -18,6 +18,11 @@ variable "public_subnets" {
   type        = list(string)
 }
 
+variable "target_group_blue_arn" {
+  description = "ALB Blue Target Group ARN"
+  type        = string
+}
+
 variable "target_group_blue_name" {
   description = "ALB Blue Target Group Name"
   type        = string
