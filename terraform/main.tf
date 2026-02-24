@@ -11,6 +11,21 @@ data "aws_subnets" "default" {
     values = [data.aws_vpc.default.id]
   }
 }
+
+# Fetch details for all subnets to determine their Availability Zones
+data "aws_subnet" "all" {
+  for_each = toset(data.aws_subnets.default.ids)
+  id       = each.value
+}
+
+locals {
+  # Group subnets by AZ
+  subnets_by_az = {
+    for s in data.aws_subnet.all : s.availability_zone => s.id...
+  }
+  # Extract exactly one subnet per AZ to prevent ALB InvalidConfigurationRequest
+  public_subnets = [for az, ids in local.subnets_by_az : ids[0]]
+}
 # --- Private Network Infrastructure ---
 
 # 1. Elastic IP for NAT Gateway
@@ -25,7 +40,7 @@ resource "aws_eip" "nat" {
 # We pick the first default subnet for the NAT Gateway
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = tolist(data.aws_subnets.default.ids)[0]
+  subnet_id     = local.public_subnets[0]
 
   tags = {
     Name = "${var.project_name}-nat-gw"
@@ -124,7 +139,7 @@ resource "aws_security_group" "ecs_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
-  
+
   # Allow SSH if needed (optional, removed for security unless requested)
 
   egress {
@@ -148,7 +163,7 @@ resource "aws_security_group" "rds_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs_sg.id]
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -174,17 +189,17 @@ module "alb" {
   source         = "./modules/alb"
   project_name   = var.project_name
   vpc_id         = data.aws_vpc.default.id
-  public_subnets = data.aws_subnets.default.ids # ALB remains in Public Subnets
+  public_subnets = local.public_subnets # Filtered to 1 subnet per AZ
   alb_sg_id      = aws_security_group.alb_sg.id
 }
 
 module "ecs" {
-  source           = "./modules/ecs"
-  project_name     = var.project_name
-  region           = var.region
-  ecs_sg_id        = aws_security_group.ecs_sg.id
-  public_subnets   = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: ECS in Private Subnets
-  
+  source         = "./modules/ecs"
+  project_name   = var.project_name
+  region         = var.region
+  ecs_sg_id      = aws_security_group.ecs_sg.id
+  public_subnets = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: ECS in Private Subnets
+
   # ALB ARNs for CodeDeploy Blue/Green
   target_group_blue_arn   = module.alb.target_group_blue_arn
   target_group_blue_name  = module.alb.target_group_blue_name
@@ -195,7 +210,7 @@ module "ecs" {
   # Pass the repository URL and the specific tag we want to deploy
   image_url = data.aws_ecr_repository.strapi.repository_url
   image_tag = var.image_tag
-  
+
   vpc_id = data.aws_vpc.default.id
 
   db_host     = module.rds.db_host
