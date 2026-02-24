@@ -59,6 +59,23 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
+        working-directory: ./terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+          TF_VAR_jwt_secret: ${{ secrets.TF_VAR_JWT_SECRET }}
+          TF_VAR_admin_jwt_secret: ${{ secrets.TF_VAR_ADMIN_JWT_SECRET }}
+          TF_VAR_app_keys: ${{ secrets.TF_VAR_APP_KEYS }}
+          TF_VAR_api_token_salt: ${{ secrets.TF_VAR_API_TOKEN_SALT }}
+
       - name: Download current task definition
         run: |
           aws ecs describe-task-definition --task-definition strapi-prod-task --query taskDefinition > task-definition.json
