@@ -1,0 +1,74 @@
+{
+    "family": "strapi-prod-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "1024",
+    "memory": "2048",
+    "executionRoleArn": "arn:aws:iam::811738710312:role/ecs_fargate_taskRole",
+    "containerDefinitions": [
+        {
+            "name": "strapi",
+            "image": "<IMAGE1_NAME>",
+            "essential": true,
+            "portMappings": [
+                {
+                    "containerPort": 1337,
+                    "hostPort": 1337,
+                    "protocol": "tcp"
+                }
+            ],
+            "environment": [
+                {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                },
+                {
+                    "name": "DATABASE_CLIENT",
+                    "value": "postgres"
+                },
+                {
+                    "name": "DATABASE_HOST",
+                    "value": ""
+                },
+                {
+                    "name": "DATABASE_PORT",
+                    "value": "5432"
+                },
+                {
+                    "name": "DATABASE_NAME",
+                    "value": "strapi"
+                },
+                {
+                    "name": "DATABASE_USERNAME",
+                    "value": "postgres"
+                },
+                {
+                    "name": "DATABASE_PASSWORD",
+                    "value": ""
+                },
+                {
+                    "name": "JWT_SECRET",
+                    "value": ""
+                },
+                {
+                    "name": "ADMIN_JWT_SECRET",
+                    "value": ""
+                },
+                {
+                    "name": "APP_KEYS",
+                    "value": ""
+                },
+                {
+                    "name": "API_TOKEN_SALT",
+                    "value": ""
+                },
+                {
+                    "name": "DATABASE_SSL",
+                    "value": "false"
+                }
+            ]
+        }
+    ]
+}

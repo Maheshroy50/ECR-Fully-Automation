@@ -95,6 +95,14 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "HTTPS from anywhere"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -176,7 +184,12 @@ module "ecs" {
   region           = var.region
   ecs_sg_id        = aws_security_group.ecs_sg.id
   public_subnets   = [aws_subnet.private_1.id, aws_subnet.private_2.id] # NEW: ECS in Private Subnets
-  target_group_arn = module.alb.target_group_arn
+  
+  # ALB ARNs for CodeDeploy Blue/Green
+  target_group_blue_name  = module.alb.target_group_blue_name
+  target_group_green_name = module.alb.target_group_green_name
+  listener_prod_arn       = module.alb.listener_prod_arn
+  listener_test_arn       = module.alb.listener_test_arn
 
   # Pass the repository URL and the specific tag we want to deploy
   image_url = data.aws_ecr_repository.strapi.repository_url

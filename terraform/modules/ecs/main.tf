@@ -7,14 +7,14 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# --- Capacity Provider (FARGATE_SPOT) ---
+# --- Capacity Provider (FARGATE) ---
 resource "aws_ecs_cluster_capacity_providers" "main" {
   cluster_name = aws_ecs_cluster.main.name
 
-  capacity_providers = ["FARGATE_SPOT"]
+  capacity_providers = ["FARGATE"]
 
   default_capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 1
     base              = 1
   }
@@ -71,9 +71,14 @@ resource "aws_ecs_service" "strapi" {
 
   # Use capacity provider strategy instead of launch_type
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
+    capacity_provider = "FARGATE"
     weight            = 1
     base              = 1
+  }
+
+  # Use CodeDeploy for Blue/Green
+  deployment_controller {
+    type = "CODE_DEPLOY"
   }
 
   network_configuration {
@@ -83,8 +88,72 @@ resource "aws_ecs_service" "strapi" {
   }
 
   load_balancer {
-    target_group_arn = var.target_group_arn
+    target_group_arn = var.target_group_blue_name # Start with Blue
     container_name   = "strapi"
     container_port   = 1337
+  }
+
+  # CodeDeploy will manage task definitions and target groups dynamically
+  lifecycle {
+    ignore_changes = [task_definition, load_balancer]
+  }
+}
+
+# --- CodeDeploy Resources ---
+resource "aws_codedeploy_app" "strapi" {
+  compute_platform = "ECS"
+  name             = "${var.project_name}-codedeploy-app"
+}
+
+resource "aws_codedeploy_deployment_group" "strapi" {
+  app_name               = aws_codedeploy_app.strapi.name
+  deployment_group_name  = "${var.project_name}-codedeploy-group"
+  deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
+  service_role_arn       = "arn:aws:iam::811738710312:role/codedeploy_role"
+
+  auto_rollback_configuration {
+    enabled = true
+    events  = ["DEPLOYMENT_FAILURE"]
+  }
+
+  blue_green_deployment_config {
+    deployment_ready_option {
+      action_on_timeout = "CONTINUE_DEPLOYMENT"
+    }
+
+    terminate_blue_instances_on_deployment_success {
+      action                           = "TERMINATE"
+      termination_wait_time_in_minutes = 5
+    }
+  }
+
+  deployment_style {
+    deployment_option = "WITH_TRAFFIC_CONTROL"
+    deployment_type   = "BLUE_GREEN"
+  }
+
+  ecs_service {
+    cluster_name = aws_ecs_cluster.main.name
+    service_name = aws_ecs_service.strapi.name
+  }
+
+  load_balancer_info {
+    target_group_pair_info {
+      prod_traffic_route {
+        listener_arns = [var.listener_prod_arn]
+      }
+      
+      test_traffic_route {
+        listener_arns = [var.listener_test_arn]
+      }
+
+      target_group {
+        name = var.target_group_blue_name
+      }
+
+      target_group {
+        name = var.target_group_green_name
+      }
+    }
   }
 }
